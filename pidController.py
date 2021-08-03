@@ -10,7 +10,7 @@ max_speed = 60
 
 # Defining the Car object here
 class Car(object):
-    def __init__(self, length = 10.0):
+    def __init__(self, length = 1.0):
         # Initial co-ordinates of the car
         # Add functionality to spawn the car at the start point entered by the user
         self.x = 0.0
@@ -136,7 +136,7 @@ def pidController(car, goal, tau_p, tau_d, tau_i, n = 10000, velocity = 10.0):
     orientation = car.orientation
     integral = 0
     prev_orientation = np.abs(orientation - slope)
-    orientation_tolerance = 0.1
+    orientation_tolerance = 0.05
     slope_total = []
     orientation_total = []
     tolerance2 = 10.0
@@ -155,6 +155,7 @@ def pidController(car, goal, tau_p, tau_d, tau_i, n = 10000, velocity = 10.0):
 
         y_error = car.y - waypoint[1]
         x_error = car.x - waypoint[0]
+        orientation = car.orientation
 
         delta_orientation = orientation - slope
         time += 1
@@ -163,7 +164,7 @@ def pidController(car, goal, tau_p, tau_d, tau_i, n = 10000, velocity = 10.0):
         derivative = (delta_orientation - prev_orientation)
         prev_orientation = delta_orientation
 
-        if np.abs(delta_orientation) > orientation_tolerance:
+        if np.abs(delta_orientation) >= orientation_tolerance:
             sum_cte += y_error
             dev = y_error - prev_cte
             prev_cte = y_error
@@ -183,6 +184,7 @@ def pidController(car, goal, tau_p, tau_d, tau_i, n = 10000, velocity = 10.0):
     fig, ax1 = plt.subplots(1, 1, figsize=(8, 4))
     ax1.plot(slope_total, 'g')
     ax1.plot(orientation_total, 'r')
+    ax1.plot(turn_values, 'b')
     plt.legend()
     plt.show()
 
@@ -197,7 +199,9 @@ def find_orientation(goal):
     return np.tan(slope)
 
 def main():
-    goal = [[3, 2], [70, 15], [120, 4], [190, 25], [250, 25]]
+    #goal = [[0.0, 0.0], [3.0, 0.5], [5.9, 1.0], [8.9, 1.6], [11.8, 2.1], [14.8, 2.6],
+    #       [17.7, 3.1], [20.7, 3.6], [20.7, 6.6], [19.5, 9.5]]
+    goal = [[3, 2], [70, 15], [120, 4], [160, 4], [200, 25], [270, 25]]
     goal_x = []
     goal_y = []
 
@@ -210,7 +214,7 @@ def main():
     car = Car()
     car.set(goal_x[0], goal_y[0], init_orientation)
     car.set_steering_commands(10.0/180.0*np.pi)
-    x_trajectory, y_trajectory = pidController(car, goal, 0.5 ,12.0, 0.0001, velocity=1.0)
+    x_trajectory, y_trajectory = pidController(car, goal, 0.009 ,.50, 0.00002, velocity=1.0)
     n = len(x_trajectory)
 
     fig, ax1 = plt.subplots(1, 1, figsize=(8,4))
