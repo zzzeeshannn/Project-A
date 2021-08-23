@@ -385,7 +385,7 @@ class RRT:
 # ------------------------------- Pure Pursuit Controller here ---------------------------------------------------------
 
 # Parameters
-k = 0.05  # look forward gain
+k = 0.01  # look forward gain
 Lfc = 2.5  # [m] look-ahead distance
 Kp = 1.0  # speed proportional gain
 dt = 0.1  # [s] time tick
@@ -541,6 +541,16 @@ def plot_arrow(x, y, yaw, length=1.0, width=0.5, fc="r", ec="k"):
                   fc=fc, ec=ec, head_width=width, head_length=width)
         plt.plot(x, y)
 
+def find_orientation(goal):
+    # This function is priarily used to find the inital orientation for the car
+
+    init_x, init_y = goal[0][0], goal[0][1]
+    end_x, end_y = goal[1][0], goal[1][1]
+
+    slope = (end_y - init_y)/(end_x - init_x)
+
+    return np.tan(slope)
+
 def main(gx=6.0, gy=10.0):
     print("start " + __file__)
     # Declare required variables here
@@ -598,8 +608,10 @@ def main(gx=6.0, gy=10.0):
 
     T = 100.0  # max simulation time
 
+    init_orientation = find_orientation(goal)
+
     # initial state
-    state = State(x=goal_x[0], y=goal_y[0], yaw=0.0, v=0.0)
+    state = State(x=goal_x[0], y=goal_y[0], yaw=-init_orientation, v=0.0)
 
     lastIndex = len(cx) - 1
     time = 0.0
@@ -642,7 +654,7 @@ def main(gx=6.0, gy=10.0):
     # Test
     assert lastIndex >= target_ind, "Cannot goal"
     plt.plot(cx, cy, ".r", label="course")
-    plt.plot(states.x, states.y, "-b", label="trajectory")
+    plt.plot(states.x, states.y, "-g", label="trajectory")
     plt.grid(True)
     plt.pause(0.01)
     plt.show()

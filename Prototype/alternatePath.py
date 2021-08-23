@@ -1,4 +1,4 @@
-# Base code for Randomized Rapidly-Exploring Random Trees (RRT) inspired from AtsushiSakai (@Atsushi_twi)
+# Base code for Randomized Rapidly-Exploring Random Trees (RRT) inspired from Python Robotics - AtsushiSakai (@Atsushi_twi)
 
 import math
 import random
@@ -382,10 +382,25 @@ class RRT:
         theta = math.atan2(dy, dx)
         return d, theta
 
+def node_length(a, b):
+    return np.sqrt((a[0] - b[0])**2 + (a[1] - b[1])**2)
+
+def find_distance(path):
+    pathlen = len(path)
+    i = 0
+    dist = 0
+
+    while (i < pathlen - 1):
+        dist += node_length(path[i],path[i+1])
+        i += 1
+
+    return dist
 
 def main(gx=6.0, gy=10.0):
     # Variable declarations here
     all_paths = []
+    counter = 0
+
     print("start " + __file__)
 
     # ====Search Path with RRT====
@@ -397,6 +412,8 @@ def main(gx=6.0, gy=10.0):
         rand_area=[-2, 15],
         obstacle_list=obstacleList)
     path = rrt.planning(animation=show_animation)
+    path_len = len(path)
+    distance = find_distance(path)
 
     if path is None:
         print("Cannot find path")
@@ -404,21 +421,36 @@ def main(gx=6.0, gy=10.0):
         print("found path!!")
 
     for every_node in path:
+        counter += 1
+        new_path = []
+        z = counter
         temp_x = every_node[0]
         temp_y = every_node[1]
+
+        # Call RRT from the selected node
         rrt = RRT(start=[temp_x, temp_y],
                   goal=[gx, gy],
                   rand_area=[-2, 15],
                   obstacle_list=obstacleList)
         new_path = rrt.planning(animation=show_animation)
+
+        while(z < path_len):
+            new_path.append(path[z])
+            z += 1
+
         all_paths.append(new_path)
+
+    for every_path in all_paths:
+        new_distance = find_distance(every_path)
+        if new_distance < distance:
+            path = every_path
+
     # Draw final paths
     if show_animation:
         rrt.draw_graph()
-        plt.plot([x for (x, y) in path], [y for (x, y) in path], '-r')
         for every_path in all_paths:
-            plt.plot([x for (x, y) in path], [y for (x, y) in path], '-r')
             plt.plot([x for (x, y) in every_path], [y for (x, y) in every_path], '-g')
+        plt.plot([x for (x, y) in path], [y for (x, y) in path], 'black')
         plt.grid(True)
         plt.pause(0.01)  # Need for Mac
         plt.show()
