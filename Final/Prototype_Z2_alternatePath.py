@@ -211,7 +211,7 @@ class RRT:
                 self.node_list.append(new_node)
 
             if animation and i % 2 == 0:
-                self.draw_graph(rnd_node, z, z2)
+                self.draw_graph(rnd_node)
 
             # Check if the distance from the latest node to the goal state is within the set area
             if self.calc_dist_to_goal(self.node_list[-1].x, self.node_list[-1].y) <= self.expand_dis:
@@ -223,7 +223,7 @@ class RRT:
 
             if animation and i % 2:
                 done = True
-                self.draw_graph(rnd_node, z, z2)
+                self.draw_graph(rnd_node, z)
 
         return None  # cannot find path
 
@@ -381,6 +381,20 @@ class RRT:
         d = math.hypot(dx, dy)
         theta = math.atan2(dy, dx)
         return d, theta
+
+def node_length(a, b):
+    return np.sqrt((a[0] - b[0])**2 + (a[1] - b[1])**2)
+
+def find_distance(path):
+    pathlen = len(path)
+    i = 0
+    dist = 0
+
+    while (i < pathlen - 1):
+        dist += node_length(path[i],path[i+1])
+        i += 1
+
+    return dist
 
 # ------------------------------- Pure Pursuit Controller here ---------------------------------------------------------
 
@@ -552,46 +566,107 @@ def find_orientation(goal):
     return np.tan(slope)
 
 def main(gx=6.0, gy=10.0):
-    print("start " + __file__)
-    # Declare required variables here
+    # Variable declarations here
     follow = []
+    all_paths = []
+    temp_holder = []
+    counter = 0
+
+
+    print("start " + __file__)
 
     # ====Search Path with RRT====
     obstacleList = [(5, 5, 1), (3, 6, 2), (3, 8, 2), (3, 10, 2), (7, 5, 2),
                     (9, 5, 2), (8, 10, 1)]  # [x, y, radius]
     # Set Initial parameters
-    rrt = RRT( start=[0, 0],
-        goal=[gx, gy],
-        rand_area=[-2, 15],
-        obstacle_list=obstacleList)
+    rrt = RRT(start=[0, 0],
+              goal=[gx, gy],
+              rand_area=[-2, 15],
+              obstacle_list=obstacleList)
     path = rrt.planning(animation=show_animation)
+    path_len = len(path)
+    distance = find_distance(path)
+
+    if path is None:
+        print("Cannot find path")
+    else:
+        print("found path!!")
+
+    for every_node in path:
+        counter += 1
+        new_path = []
+        z = counter
+        temp_x = every_node[0]
+        temp_y = every_node[1]
+
+        # Call RRT from the selected node
+        rrt = RRT(start=[temp_x, temp_y],
+                  goal=[gx, gy],
+                  rand_area=[-2, 15],
+                  obstacle_list=obstacleList)
+        new_path = rrt.planning(animation=show_animation)
+
+        while (z < path_len):
+            new_path.append(path[z])
+            z += 1
+
+        all_paths.append(new_path)
+
+    for every_path in all_paths:
+        new_distance = find_distance(every_path)
+        if new_distance < distance:
+            path = every_path
+
+    # Using this for observation purpose
+    temp_holder = path
+
+    # Repeat process
+    for every_node in path:
+        counter += 1
+        new_path = []
+        z = counter
+        temp_x = every_node[0]
+        temp_y = every_node[1]
+
+        # Call RRT from the selected node
+        rrt = RRT(start=[temp_x, temp_y],
+                  goal=[gx, gy],
+                  rand_area=[-2, 15],
+                  obstacle_list=obstacleList)
+        new_path = rrt.planning(animation=show_animation)
+
+        while (z < path_len):
+            new_path.append(path[z])
+            z += 1
+
+        all_paths.append(new_path)
+
+    for every_path in all_paths:
+        new_distance = find_distance(every_path)
+        if new_distance < distance:
+            path = every_path
+
+    # Draw final paths
+    if show_animation:
+        rrt.draw_graph()
+        for every_path in all_paths:
+            plt.plot([x for (x, y) in every_path], [y for (x, y) in every_path], '-g')
+        plt.plot([x for (x, y) in path], [y for (x, y) in path], 'black')
+        plt.plot([x for (x, y) in temp_holder], [y for (x, y) in temp_holder], 'orange')
+        plt.grid(True)
+        plt.pause(0.01)  # Need for Mac
+        plt.show()
+
+
+    # Motion planning starts here
 
     # The 'path' is in reversed order i.e the starting point is at the end of the list "path"
     # We reverse the order here
     list_length = len(path)
     high = list_length - 1
-    while(high >= 0):
+    while (high >= 0):
         follow.append(path[high])
         high -= 1
-
-
-    if path is None:
-        print("Cannot find path")
-    else:
-        print("Path found!")
-
-        if show_animation:
-            # Draw final path
-            if show_animation:
-                rrt.draw_graph()
-                plt.plot([x for (x, y) in path], [y for (x, y) in path], '-r')
-                plt.grid(True)
-                plt.pause(0.01)  # Need for Mac
-                plt.show()
-
-
-    # Motion planning starts here
-
     goal = follow
     goal_x = []
     goal_y = []
