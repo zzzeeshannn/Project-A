@@ -53,7 +53,7 @@ class RRT:
             self.path_y = []
             self.parent = None
 
-    def __init__(self, start, goal, obstacle_list, rand_area, expand_dis=3.0, path_resolution=0.5, goal_sample_rate=5, max_iter=500):
+    def __init__(self, start, goal, obstacle_list, rand_area, expand_dis=3.0, path_resolution=0.5, goal_sample_rate=5, max_iter=500, path = None):
         """
         Setting Parameter
 
@@ -63,6 +63,9 @@ class RRT:
         randArea:Random Sampling Area [min,max]
 
         """
+        # Path for graph
+        self.temp_path = path
+
         # Defines the starting point
         self.start = self.Node(start[0], start[1])
         # Defines the end point
@@ -281,9 +284,12 @@ class RRT:
             rnd = self.Node(self.end.x, self.end.y)
         return rnd
 
-    def draw_graph(self, rnd=None, zono=None, zono2=None):
+    def draw_graph(self, rnd=None,  zono=None, zono2=None):
 
         plt.clf()
+        if self.temp_path is not None:
+            plt.plot([x for (x, y) in self.temp_path], [y for (x, y) in self.temp_path], 'r-')
+
         if rnd is not None:
             plt.plot(rnd.x, rnd.y, "^k")
         for node in self.node_list:
@@ -561,7 +567,7 @@ def find_orientation(goal):
     init_x, init_y = goal[0][0], goal[0][1]
     end_x, end_y = goal[1][0], goal[1][1]
 
-    slope = (end_y - init_y)/(end_x - init_x)
+    slope = np.abs(end_y - init_y)/np.abs(end_x - init_x)
 
     return np.tan(slope)
 
@@ -603,7 +609,8 @@ def main(gx=6.0, gy=10.0):
         rrt = RRT(start=[temp_x, temp_y],
                   goal=[gx, gy],
                   rand_area=[-2, 15],
-                  obstacle_list=obstacleList)
+                  obstacle_list=obstacleList,
+                  path = path)
         new_path = rrt.planning(animation=show_animation)
 
         while (z < path_len):
@@ -632,7 +639,8 @@ def main(gx=6.0, gy=10.0):
         rrt = RRT(start=[temp_x, temp_y],
                   goal=[gx, gy],
                   rand_area=[-2, 15],
-                  obstacle_list=obstacleList)
+                  obstacle_list=obstacleList,
+                  path = path)
         new_path = rrt.planning(animation=show_animation)
 
         while (z < path_len):
