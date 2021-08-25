@@ -405,7 +405,7 @@ def find_distance(path):
 # ------------------------------- Pure Pursuit Controller here ---------------------------------------------------------
 
 # Parameters
-k = 0.01  # look forward gain
+k = 0.05  # look forward gain
 Lfc = 2.5  # [m] look-ahead distance
 Kp = 1.0  # speed proportional gain
 dt = 0.1  # [s] time tick
@@ -495,7 +495,7 @@ class TargetCourse:
 
         # search look ahead target point index
         while Lf > state.calc_distance(self.cx[ind], self.cy[ind]):
-            if (ind + 1) >= len(self.cx):
+            if (ind) >= len(self.cx):
                 break  # not exceed goal
             ind += 1
 
