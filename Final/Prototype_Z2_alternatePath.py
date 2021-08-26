@@ -343,7 +343,7 @@ class RRT:
 
         if node is None:
             return False
-
+        """
         dx_list2 = [center2[0] - x for x in node.path_x]
         dy_list2 = [center2[1] - y for y in node.path_y]
         d_list2 = [dx * dx + dy * dy for (dx, dy) in zip(dx_list2, dy_list2)]
@@ -369,7 +369,7 @@ class RRT:
         if min(d_list1) <= area:
             print(f"Dynamic collision detected at: ", (node.x, node.y))
             return False  # collision
-
+        """
         for (ox, oy, size) in obstacleList:
             dx_list = [ox - x for x in node.path_x]
             dy_list = [oy - y for y in node.path_y]
@@ -453,7 +453,14 @@ class States:
         self.t.append(t)
 
 
-def proportional_control(target, current):
+def proportional_control(target, current, flag=1):
+    # Accelerate
+    if flag == 1:
+        Kp = 0.25
+    # Decelerate
+    else:
+        Kp = 2.0
+
     a = Kp * (target - current)
 
     return a
@@ -502,6 +509,7 @@ class TargetCourse:
 
 
 def pure_pursuit_steer_control(state, trajectory, pind, k = 0.01, Lfc=2.5):
+    max_steering_angle = np.pi/3
     ind, Lf = trajectory.search_target_index(state, k, Lfc)
 
     if pind >= ind:
@@ -518,6 +526,8 @@ def pure_pursuit_steer_control(state, trajectory, pind, k = 0.01, Lfc=2.5):
     alpha = math.atan2(ty - state.rear_y, tx - state.rear_x) - state.yaw
 
     delta = math.atan2(2.0 * WB * math.sin(alpha) / Lf, 1.0)
+    if delta > max_steering_angle:
+        delta = max_steering_angle
 
     return delta, ind
 
@@ -589,6 +599,8 @@ def main(gx=6.0, gy=10.0):
     counter = 0
     k = 0.01
     Lfc = 2.5
+    flag = 1
+    max_steering_angle = np.pi/3
 
 
     print("start " + __file__)
@@ -699,7 +711,7 @@ def main(gx=6.0, gy=10.0):
     cx = goal_x
     cy = goal_y
 
-    target_speed = 10.0 / 5.0  # [m/s]
+    target_speed = 10.0 / 15.0  # [m/s]
 
     T = 100.0  # max simulation time
 
@@ -741,17 +753,21 @@ def main(gx=6.0, gy=10.0):
         # Calc control input
         time += dt
         for every_time in collision_time:
-            if time == every_time - 2:
+            if (time == every_time - 2 or time == every_time - 3 or time == every_time - 4):
                 k = 0.05
                 Lfc = 1.0
                 new_speed = 0.3 * target_speed
+                flag = 0
             else:
                 k = 0.01
                 Lfc = 2.5
 
-        ai = proportional_control(new_speed, state.v)
         di, target_ind = pure_pursuit_steer_control(
             state, target_course, target_ind, k, Lfc)
+        if di == max_steering_angle:
+            new_speed = 0.1 * target_speed
+            flag = 0
+        ai = proportional_control(new_speed, state.v, flag)
 
         state.update(ai, di)  # Control vehicle
         states.append(time, state)

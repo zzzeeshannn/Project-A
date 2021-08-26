@@ -604,7 +604,7 @@ def main(gx=6.0, gy=10.0):
     cx = goal_x
     cy = goal_y
 
-    target_speed = 10.0 / 20  # [m/s]
+    target_speed = 10.0 / 10  # [m/s]
 
     T = 100.0  # max simulation time
 
