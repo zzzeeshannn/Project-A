@@ -405,8 +405,6 @@ def find_distance(path):
 # ------------------------------- Pure Pursuit Controller here ---------------------------------------------------------
 
 # Parameters
-k = 0.05  # look forward gain
-Lfc = 2.5  # [m] look-ahead distance
 Kp = 1.0  # speed proportional gain
 dt = 0.1  # [s] time tick
 WB = 2.9  # [m] wheel base of vehicle
@@ -468,7 +466,7 @@ class TargetCourse:
         self.cy = cy
         self.old_nearest_point_index = None
 
-    def search_target_index(self, state):
+    def search_target_index(self, state, k = 0.01, Lfc=2.5):
 
         # To speed up nearest point search, doing it at only first time.
         if self.old_nearest_point_index is None:
@@ -493,17 +491,18 @@ class TargetCourse:
 
         Lf = k * state.v + Lfc  # update look ahead distance
 
+        print(ind)
         # search look ahead target point index
         while Lf > state.calc_distance(self.cx[ind], self.cy[ind]):
-            if (ind) >= len(self.cx):
+            if (ind) > len(self.cx):
                 break  # not exceed goal
             ind += 1
 
         return ind, Lf
 
 
-def pure_pursuit_steer_control(state, trajectory, pind):
-    ind, Lf = trajectory.search_target_index(state)
+def pure_pursuit_steer_control(state, trajectory, pind, k = 0.01, Lfc=2.5):
+    ind, Lf = trajectory.search_target_index(state, k, Lfc)
 
     if pind >= ind:
         ind = pind
@@ -571,12 +570,25 @@ def find_orientation(goal):
 
     return np.tan(slope)
 
+def check_collision_alternate(x, y, obstacleList):
+    for (ox, oy, size) in obstacleList:
+        dx_list = [ox - x]
+        dy_list = [oy - y]
+        d_list = [np.sqrt(dx * dx + dy * dy) for (dx, dy) in zip(dx_list, dy_list)]
+
+        if min(d_list) <= size - 2:
+            return False  # collision
+
+        return True  # safe
+
 def main(gx=6.0, gy=10.0):
     # Variable declarations here
     follow = []
     all_paths = []
-    temp_holder = []
+    collision_time = []
     counter = 0
+    k = 0.01
+    Lfc = 2.5
 
 
     print("start " + __file__)
@@ -687,7 +699,7 @@ def main(gx=6.0, gy=10.0):
     cx = goal_x
     cy = goal_y
 
-    target_speed = 10.0 / 20  # [m/s]
+    target_speed = 10.0 / 5.0  # [m/s]
 
     T = 100.0  # max simulation time
 
@@ -695,7 +707,6 @@ def main(gx=6.0, gy=10.0):
 
     # initial state
     state = State(x=goal_x[0], y=goal_y[0], yaw=init_orientation, v=0.0)
-
     lastIndex = len(cx) - 1
     time = 0.0
     states = States()
@@ -703,16 +714,46 @@ def main(gx=6.0, gy=10.0):
     target_course = TargetCourse(cx, cy)
     target_ind, _ = target_course.search_target_index(state)
 
+    # Simulation variables
+    temp_state = State(x=goal_x[0], y=goal_y[0], yaw=init_orientation, v=0.0)
+    temp_lastIndex = len(cx) - 1
+    temp_time = 0.0
+    temp_states = States()
+    temp_states.append(temp_time, temp_state)
+    temp_target_course = TargetCourse(cx, cy)
+    temp_target_ind, _ = temp_target_course.search_target_index(temp_state)
+
+    while T >= temp_time and temp_lastIndex > temp_target_ind:
+        # Calc control input
+        temp_time += dt
+
+        temp_ai = proportional_control(target_speed, temp_state.v)
+        temp_di, temp_target_ind = pure_pursuit_steer_control(
+            temp_state, temp_target_course, temp_target_ind, k, Lfc)
+
+        temp_state.update(temp_ai, temp_di)  # Control vehicle
+        if check_collision_alternate(temp_state.x, temp_state.y, obstacleList):
+            collision_time.append(temp_time)
+
     while T >= time and lastIndex > target_ind:
 
+        new_speed = target_speed
         # Calc control input
-        ai = proportional_control(target_speed, state.v)
+        time += dt
+        for every_time in collision_time:
+            if time == every_time - 2:
+                k = 0.05
+                Lfc = 1.0
+                new_speed = 0.3 * target_speed
+            else:
+                k = 0.01
+                Lfc = 2.5
+
+        ai = proportional_control(new_speed, state.v)
         di, target_ind = pure_pursuit_steer_control(
-            state, target_course, target_ind)
+            state, target_course, target_ind, k, Lfc)
 
         state.update(ai, di)  # Control vehicle
-
-        time += dt
         states.append(time, state)
 
         if show_animation:  # pragma: no cover

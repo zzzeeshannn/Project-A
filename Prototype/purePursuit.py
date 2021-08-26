@@ -108,8 +108,15 @@ class TargetCourse:
 
         return ind, Lf
 
+def find_distance(ax, ay, bx, by):
+    return np.sqrt((ax - bx)**2 + (ay - by)**2)
 
 def pure_pursuit_steer_control(state, trajectory, pind):
+    # Define the required parameters here
+    waypoint_tolerance = 2.5
+    ca = 0.15
+    max_steering_angle = np.pi/4
+
     ind, Lf = trajectory.search_target_index(state)
 
     if pind >= ind:
@@ -123,9 +130,29 @@ def pure_pursuit_steer_control(state, trajectory, pind):
         ty = trajectory.cy[-1]
         ind = len(trajectory.cx) - 1
 
-    alpha = math.atan2(ty - state.rear_y, tx - state.rear_x) - state.yaw
+    if ind < len(trajectory.cx) - 1:
+        next_tx = trajectory.cx[ind + 1]
+        next_ty = trajectory.cy[ind + 1]
+    else:
+        next_tx = tx
+        next_ty = ty
+        ca = 0
 
-    delta = math.atan2(2.0 * WB * math.sin(alpha) / 2*Lf, 1.0)
+    # If the robot is nearing its waypoint, start adding the bearing for the next waypoint
+    # This leads to smoother turning for this particular project
+    curr_distance = find_distance(state.x, state.y, tx, ty)
+    if curr_distance < waypoint_tolerance:
+        temp_alpha = math.atan2(next_ty - state.rear_y, next_tx - state.rear_x) - state.yaw
+        alpha = math.atan2(ty - state.rear_y, tx - state.rear_x) - state.yaw + ca * temp_alpha
+    else:
+        alpha = math.atan2(ty - state.rear_y, tx - state.rear_x) - state.yaw
+
+    # Modified delta by increasing the weightage of Lookahead distance
+    # ------------------------- ADD A CHECK FOR MAX STEERING ANGLE ------------------------------------------
+    delta = math.atan2(2.0 * WB * math.sin(alpha) / 2.0*Lf, 1.0)
+
+    if delta > max_steering_angle:
+        delta = max_steering_angle
 
     return delta, ind
 
