@@ -1,4 +1,12 @@
-# Base code for Randomized Rapidly-Exploring Random Trees (RRT) inspired from Python Robotics - AtsushiSakai (@Atsushi_twi)
+"""
+
+Path tracking simulation with pure pursuit steering and PID speed control highly influenced from authors:
+Atsushi Sakai (@Atsushi_twi)
+Guillaume Jacquenot (@Gjacquenot)
+
+Additional features and changes added by:
+Zeeshan Shaikh
+"""
 
 import math
 import random

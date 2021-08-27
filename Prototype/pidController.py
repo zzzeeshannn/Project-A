@@ -1,3 +1,13 @@
+"""
+
+Path tracking simulation with pure pursuit steering and PID speed control highly influenced from authors:
+Atsushi Sakai (@Atsushi_twi)
+Guillaume Jacquenot (@Gjacquenot)
+
+Additional features and changes added by:
+Zeeshan Shaikh
+"""
+
 # Import files here
 import numpy as np
 import matplotlib.pyplot as plt
