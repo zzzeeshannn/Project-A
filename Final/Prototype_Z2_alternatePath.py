@@ -507,10 +507,16 @@ class TargetCourse:
 
         return ind, Lf
 
+def find_distance_alternate(ax, ay, bx, by):
+    return np.sqrt((ax - bx)**2 + (ay - by)**2)
 
 def pure_pursuit_steer_control(state, trajectory, pind, k = 0.01, Lfc=2.5):
-    max_steering_angle = np.pi/3
-    ind, Lf = trajectory.search_target_index(state, k, Lfc)
+    # Define the required parameters here
+    waypoint_tolerance = 1.5
+    ca = 0.30
+    max_steering_angle = np.pi / 4
+
+    ind, Lf = trajectory.search_target_index(state)
 
     if pind >= ind:
         ind = pind
@@ -523,9 +529,27 @@ def pure_pursuit_steer_control(state, trajectory, pind, k = 0.01, Lfc=2.5):
         ty = trajectory.cy[-1]
         ind = len(trajectory.cx) - 1
 
-    alpha = math.atan2(ty - state.rear_y, tx - state.rear_x) - state.yaw
+    if ind < len(trajectory.cx) - 2:
+        next_tx = trajectory.cx[ind + 1]
+        next_ty = trajectory.cy[ind + 1]
+    else:
+        next_tx = tx
+        next_ty = ty
+        ca = 0
 
-    delta = math.atan2(2.0 * WB * math.sin(alpha) / Lf, 1.0)
+    # If the robot is nearing its waypoint, start adding the bearing for the next waypoint
+    # This leads to smoother turning for this particular project
+    curr_distance = find_distance_alternate(state.x, state.y, tx, ty)
+    if curr_distance < waypoint_tolerance:
+        temp_alpha = math.atan2(next_ty - state.rear_y, next_tx - state.rear_x) - state.yaw
+        alpha = math.atan2(ty - state.rear_y, tx - state.rear_x) - state.yaw + ca * temp_alpha
+    else:
+        alpha = math.atan2(ty - state.rear_y, tx - state.rear_x) - state.yaw
+
+    # Modified delta by increasing the weightage of Lookahead distance
+    # ------------------------- ADD A CHECK FOR MAX STEERING ANGLE ------------------------------------------
+    delta = math.atan2(2.0 * WB * math.sin(alpha) / 2.0 * Lf, 1.0)
+
     if delta > max_steering_angle:
         delta = max_steering_angle
 
@@ -576,7 +600,7 @@ def find_orientation(goal):
     init_x, init_y = goal[0][0], goal[0][1]
     end_x, end_y = goal[1][0], goal[1][1]
 
-    slope = np.abs(end_y - init_y)/np.abs(end_x - init_x)
+    slope = end_y - init_y/end_x - init_x
 
     return np.tan(slope)
 
@@ -600,7 +624,7 @@ def main(gx=6.0, gy=10.0):
     k = 0.01
     Lfc = 2.5
     flag = 1
-    max_steering_angle = np.pi/3
+    max_steering_angle = np.pi/4
 
 
     print("start " + __file__)
@@ -711,14 +735,14 @@ def main(gx=6.0, gy=10.0):
     cx = goal_x
     cy = goal_y
 
-    target_speed = 10.0 / 15.0  # [m/s]
+    target_speed = 10.0 / 10.0  # [m/s]
 
     T = 100.0  # max simulation time
 
     init_orientation = find_orientation(goal)
 
     # initial state
-    state = State(x=goal_x[0], y=goal_y[0], yaw=init_orientation, v=0.0)
+    state = State(x=goal_x[0], y=goal_y[0], yaw=-init_orientation, v=0.0)
     lastIndex = len(cx) - 1
     time = 0.0
     states = States()
@@ -727,7 +751,7 @@ def main(gx=6.0, gy=10.0):
     target_ind, _ = target_course.search_target_index(state)
 
     # Simulation variables
-    temp_state = State(x=goal_x[0], y=goal_y[0], yaw=init_orientation, v=0.0)
+    temp_state = State(x=goal_x[0], y=goal_y[0], yaw=-init_orientation, v=0.0)
     temp_lastIndex = len(cx) - 1
     temp_time = 0.0
     temp_states = States()
@@ -756,7 +780,7 @@ def main(gx=6.0, gy=10.0):
             if (time == every_time - 2 or time == every_time - 3 or time == every_time - 4):
                 k = 0.05
                 Lfc = 1.0
-                new_speed = 0.3 * target_speed
+                new_speed = 0.1 * target_speed
                 flag = 0
             else:
                 k = 0.01
@@ -764,8 +788,8 @@ def main(gx=6.0, gy=10.0):
 
         di, target_ind = pure_pursuit_steer_control(
             state, target_course, target_ind, k, Lfc)
-        if di == max_steering_angle:
-            new_speed = 0.1 * target_speed
+        if di >= 0.6 * max_steering_angle:
+            new_speed = 0.4 * target_speed
             flag = 0
         ai = proportional_control(new_speed, state.v, flag)
 
