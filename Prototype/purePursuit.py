@@ -5,8 +5,9 @@ Atsushi Sakai (@Atsushi_twi)
 Guillaume Jacquenot (@Gjacquenot)
 
 Additional features and changes added by:
-Zeeshan Shaikh
+Zeeshan Shaikh (@zzzeeshannn)
 """
+
 import numpy as np
 import math
 import matplotlib.pyplot as plt

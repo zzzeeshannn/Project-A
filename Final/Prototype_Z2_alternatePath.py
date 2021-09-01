@@ -713,8 +713,8 @@ def main(gx=6.0, gy=10.0):
     # Draw final paths
     if show_animation:
         rrt.draw_graph()
-        #for every_path in all_paths:
-        #    plt.plot([x for (x, y) in every_path], [y for (x, y) in every_path], '-g')
+        for every_path in all_paths:
+            plt.plot([x for (x, y) in every_path], [y for (x, y) in every_path], '-g')
         plt.plot([x for (x, y) in path], [y for (x, y) in path], 'black')
         plt.plot([x for (x, y) in temp_holder], [y for (x, y) in temp_holder], 'orange')
         plt.grid(True)

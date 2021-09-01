@@ -5,7 +5,8 @@ Atsushi Sakai (@Atsushi_twi)
 Guillaume Jacquenot (@Gjacquenot)
 
 Additional features and changes added by:
-Zeeshan Shaikh
+Zeeshan Shaikh (@zzzeeshannn)
+
 """
 
 import math
