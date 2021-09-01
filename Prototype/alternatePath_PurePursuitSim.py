@@ -7,6 +7,7 @@ Guillaume Jacquenot (@Gjacquenot)
 Additional features and changes added by:
 Zeeshan Shaikh (@zzzeeshannn)
 
+Try: PP sim during route generation and collision detection (RRT + PP)
 """
 
 import math

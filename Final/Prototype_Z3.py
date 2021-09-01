@@ -20,6 +20,11 @@ import numpy as np
 
 from scipy.linalg import expm
 
+# Global variables for Pure Pursuit
+target_speed = 10.0 / 10.0  # [m/s]
+
+T = 100.0  # max simulation time
+
 # Flag for animation on or off
 show_animation = True
 
@@ -386,7 +391,8 @@ class RRT:
             dy_list = [oy - y for y in node.path_y]
             d_list = [dx * dx + dy * dy for (dx, dy) in zip(dx_list, dy_list)]
 
-            if min(d_list) <= size ** 2:
+            # Keep some extra distance from the static obstacles as a buffer to collision
+            if min(d_list) <= (size+0.5) ** 2:
                 return False  # collision
 
         return True  # safe
@@ -512,7 +518,7 @@ class TargetCourse:
         print(ind)
         # search look ahead target point index
         while Lf > state.calc_distance(self.cx[ind], self.cy[ind]):
-            if (ind) > len(self.cx):
+            if (ind) > len(self.cx)-1:
                 break  # not exceed goal
             ind += 1
 
@@ -611,9 +617,10 @@ def find_orientation(goal):
     init_x, init_y = goal[0][0], goal[0][1]
     end_x, end_y = goal[1][0], goal[1][1]
 
-    slope = end_y - init_y/end_x - init_x
+    dy = end_y - init_y
+    dx = end_x - init_x
 
-    return np.tan(slope)
+    return math.atan2(dy, dx)
 
 def check_collision_alternate(x, y, obstacleList):
     for (ox, oy, size) in obstacleList:
@@ -625,6 +632,72 @@ def check_collision_alternate(x, y, obstacleList):
             return False  # collision
 
         return True  # safe
+
+def run_simulation(goal_x, goal_y, init_orientation, gx, gy, k, Lfc, obstacleList):
+    # Simulation variables
+    cx = goal_x
+    cy = goal_y
+    temp_new_path = []
+    follow = []
+
+    temp_state = State(x=goal_x[0], y=goal_y[0], yaw=-init_orientation, v=0.0)
+    temp_lastIndex = len(cx) - 1
+    temp_time = 0.0
+    temp_states = States()
+    temp_states.append(temp_time, temp_state)
+    temp_target_course = TargetCourse(cx, cy)
+    temp_target_ind, _ = temp_target_course.search_target_index(temp_state)
+
+    while T >= temp_time and temp_lastIndex > temp_target_ind:
+        temp_final_path = []
+        # Calc control input
+        temp_time += dt
+
+        temp_ai = proportional_control(target_speed, temp_state.v)
+        temp_di, temp_target_ind = pure_pursuit_steer_control(
+            temp_state, temp_target_course, temp_target_ind, k, Lfc)
+
+        # Vehicle control
+        temp_state.update(temp_ai, temp_di)
+        # Save the state of the vehicle
+        temp_states.append(temp_time, temp_state)
+
+        if check_collision_alternate(temp_state.x, temp_state.y, obstacleList):
+            # Get state of the car 3 seconds before collision
+            if temp_time >= 3:
+                temp_x = temp_states.x[-3]
+                temp_y = temp_states.y[-3]
+            else:
+                temp_x = temp_states.x[0]
+                temp_y = temp_states.y[0]
+
+            # Get a new path with RRT algorithm
+            # Init point is the position of the car few time steps behind the expected collision
+            temp_rrt = rrt = RRT(start=[temp_x, temp_y],
+                                 goal=[gx, gy],
+                                 rand_area=[-2, 15],
+                                 obstacle_list=obstacleList)
+
+            temp_new_path = temp_rrt.planning(animation=show_animation)
+
+            list_length = len(temp_new_path)
+            high = list_length - 1
+            while (high >= 0):
+                follow.append(temp_new_path[high])
+                high -= 1
+            goal = follow
+            goal_x = []
+            goal_y = []
+
+            for i in range(len(goal)):
+                goal_x.append(goal[i][0])
+                goal_y.append(goal[i][1])
+
+            print("Collision Detected and New path Created")
+            temp_final_path = run_simulation(goal_x, goal_y, init_orientation, gx, gy, k, Lfc, obstacleList)
+            break
+
+        return temp_final_path
 
 def main(gx=6.0, gy=10.0):
     # Variable declarations here
@@ -746,14 +819,43 @@ def main(gx=6.0, gy=10.0):
     cx = goal_x
     cy = goal_y
 
-    target_speed = 10.0 / 10.0  # [m/s]
-
-    T = 100.0  # max simulation time
-
     init_orientation = find_orientation(goal)
 
+    # Run simulation here
+    temp_follow = []
+    """
+    temp_sim_path = run_simulation(goal_x, goal_y, init_orientation, gx, gy, k, Lfc, obstacleList)
+    # Reverse
+    list_length = len(temp_sim_path)
+    high = list_length - 1
+    while (high >= 0):
+        temp_follow.append(temp_sim_path[high])
+        high -= 1
+    
+    
+    if temp_follow is not None:
+        print("Executing new path")
+        temp_final_path = temp_follow
+    else:
+        temp_final_path = goal
+     """
+
+    temp_final_path = goal
+
+    goal_x = []
+    goal_y = []
+
+    for i in range(len(goal)):
+        goal_x.append(temp_final_path[i][0])
+        goal_y.append(temp_final_path[i][1])
+
+    #  target course
+    cx = goal_x
+    cy = goal_y
+
     # initial state
-    state = State(x=goal_x[0], y=goal_y[0], yaw=-init_orientation, v=0.0)
+    new_follow = []
+    state = State(x=goal_x[0], y=goal_y[0], yaw=init_orientation, v=0.0)
     lastIndex = len(cx) - 1
     time = 0.0
     states = States()
@@ -761,26 +863,22 @@ def main(gx=6.0, gy=10.0):
     target_course = TargetCourse(cx, cy)
     target_ind, _ = target_course.search_target_index(state)
 
-    # Simulation variables
-    temp_state = State(x=goal_x[0], y=goal_y[0], yaw=-init_orientation, v=0.0)
-    temp_lastIndex = len(cx) - 1
-    temp_time = 0.0
-    temp_states = States()
-    temp_states.append(temp_time, temp_state)
-    temp_target_course = TargetCourse(cx, cy)
-    temp_target_ind, _ = temp_target_course.search_target_index(temp_state)
+    new_list_length = len(temp_final_path)
+    new_high = new_list_length - 1
+    while (new_high >= 0):
+        new_follow.append(temp_final_path[new_high])
+        new_high -= 1
+    new_goal = new_follow
+    goal_x = []
+    goal_y = []
 
-    while T >= temp_time and temp_lastIndex > temp_target_ind:
-        # Calc control input
-        temp_time += dt
+    for i in range(len(new_goal)):
+        goal_x.append(new_goal[i][0])
+        goal_y.append(new_goal[i][1])
 
-        temp_ai = proportional_control(target_speed, temp_state.v)
-        temp_di, temp_target_ind = pure_pursuit_steer_control(
-            temp_state, temp_target_course, temp_target_ind, k, Lfc)
-
-        temp_state.update(temp_ai, temp_di)  # Control vehicle
-        if check_collision_alternate(temp_state.x, temp_state.y, obstacleList):
-            collision_time.append(temp_time)
+    #  target course
+    cx = goal_x
+    cy = goal_y
 
     while T >= time and lastIndex > target_ind:
 
