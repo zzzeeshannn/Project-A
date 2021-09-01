@@ -1,13 +1,12 @@
 """
 
-Path planning (RRT) and Path tracking simulation with pure pursuit steering and PID speed control base code highly influenced from authors:
+Path Planning base code (RRT) highly influenced from authors:
 Atsushi Sakai (@Atsushi_twi)
 Guillaume Jacquenot (@Gjacquenot)
 
-Additional features and functionalities added by:
+Additional features and changes added by:
 Zeeshan Shaikh (@zzzeeshannn)
 
-This code involves modified RRT with Pure Pursuit Controller without any Obstacle Avoidance
 """
 
 import math
@@ -63,7 +62,7 @@ class RRT:
             self.path_y = []
             self.parent = None
 
-    def __init__(self, start, goal, obstacle_list, rand_area, expand_dis=3.0, path_resolution=0.5, goal_sample_rate=5, max_iter=500, path = None):
+    def __init__(self, start, goal, obstacle_list, rand_area, expand_dis=3.0, path_resolution=0.5, goal_sample_rate=5, max_iter=500):
         """
         Setting Parameter
 
@@ -73,9 +72,6 @@ class RRT:
         randArea:Random Sampling Area [min,max]
 
         """
-        # Path for graph
-        self.temp_path = path
-
         # Defines the starting point
         self.start = self.Node(start[0], start[1])
         # Defines the end point
@@ -294,12 +290,9 @@ class RRT:
             rnd = self.Node(self.end.x, self.end.y)
         return rnd
 
-    def draw_graph(self, rnd=None,  zono=None, zono2=None):
+    def draw_graph(self, rnd=None, zono=None, zono2=None):
 
         plt.clf()
-        if self.temp_path is not None:
-            plt.plot([x for (x, y) in self.temp_path], [y for (x, y) in self.temp_path], 'r-')
-
         if rnd is not None:
             plt.plot(rnd.x, rnd.y, "^k")
         for node in self.node_list:
@@ -412,230 +405,10 @@ def find_distance(path):
 
     return dist
 
-# ------------------------------- Pure Pursuit Controller here ---------------------------------------------------------
-
-# Parameters
-Kp = 1.0  # speed proportional gain
-dt = 0.1  # [s] time tick
-WB = 2.9  # [m] wheel base of vehicle
-
-show_animation = True
-
-
-class State:
-
-    def __init__(self, x=0.0, y=0.0, yaw=0.0, v=0.0):
-        self.x = x
-        self.y = y
-        self.yaw = yaw
-        self.v = v
-        self.rear_x = self.x - ((WB / 2) * math.cos(self.yaw))
-        self.rear_y = self.y - ((WB / 2) * math.sin(self.yaw))
-
-    def update(self, a, delta):
-        self.x += self.v * math.cos(self.yaw) * dt
-        self.y += self.v * math.sin(self.yaw) * dt
-        self.yaw += self.v / WB * math.tan(delta) * dt
-        self.v += a * dt
-        self.rear_x = self.x - ((WB / 2) * math.cos(self.yaw))
-        self.rear_y = self.y - ((WB / 2) * math.sin(self.yaw))
-
-    def calc_distance(self, point_x, point_y):
-        dx = self.rear_x - point_x
-        dy = self.rear_y - point_y
-        return math.hypot(dx, dy)
-
-
-class States:
-
-    def __init__(self):
-        self.x = []
-        self.y = []
-        self.yaw = []
-        self.v = []
-        self.t = []
-
-    def append(self, t, state):
-        self.x.append(state.x)
-        self.y.append(state.y)
-        self.yaw.append(state.yaw)
-        self.v.append(state.v)
-        self.t.append(t)
-
-
-def proportional_control(target, current, flag=1):
-    # Accelerate
-    if flag == 1:
-        Kp = 0.25
-    # Decelerate
-    else:
-        Kp = 2.0
-
-    a = Kp * (target - current)
-
-    return a
-
-
-class TargetCourse:
-
-    def __init__(self, cx, cy):
-        self.cx = cx
-        self.cy = cy
-        self.old_nearest_point_index = None
-
-    def search_target_index(self, state, k = 0.01, Lfc=2.5):
-
-        # To speed up nearest point search, doing it at only first time.
-        if self.old_nearest_point_index is None:
-            # search nearest point index
-            dx = [state.rear_x - icx for icx in self.cx]
-            dy = [state.rear_y - icy for icy in self.cy]
-            d = np.hypot(dx, dy)
-            ind = np.argmin(d)
-            self.old_nearest_point_index = ind
-        else:
-            ind = self.old_nearest_point_index
-            distance_this_index = state.calc_distance(self.cx[ind],
-                                                      self.cy[ind])
-            while True:
-                distance_next_index = state.calc_distance(self.cx[ind + 1],
-                                                          self.cy[ind + 1])
-                if distance_this_index < distance_next_index:
-                    break
-                ind = ind + 1 if (ind + 1) < len(self.cx) else ind
-                distance_this_index = distance_next_index
-            self.old_nearest_point_index = ind
-
-        Lf = k * state.v + Lfc  # update look ahead distance
-
-        print(ind)
-        # search look ahead target point index
-        while Lf > state.calc_distance(self.cx[ind], self.cy[ind]):
-            if (ind) > len(self.cx):
-                break  # not exceed goal
-            ind += 1
-
-        return ind, Lf
-
-def find_distance_alternate(ax, ay, bx, by):
-    return np.sqrt((ax - bx)**2 + (ay - by)**2)
-
-def pure_pursuit_steer_control(state, trajectory, pind, k = 0.01, Lfc=2.5):
-    # Define the required parameters here
-    waypoint_tolerance = 1.5
-    ca = 0.30
-    max_steering_angle = np.pi / 4
-
-    ind, Lf = trajectory.search_target_index(state)
-
-    if pind >= ind:
-        ind = pind
-
-    if ind < len(trajectory.cx):
-        tx = trajectory.cx[ind]
-        ty = trajectory.cy[ind]
-    else:  # toward goal
-        tx = trajectory.cx[-1]
-        ty = trajectory.cy[-1]
-        ind = len(trajectory.cx) - 1
-
-    if ind < len(trajectory.cx) - 2:
-        next_tx = trajectory.cx[ind + 1]
-        next_ty = trajectory.cy[ind + 1]
-    else:
-        next_tx = tx
-        next_ty = ty
-        ca = 0
-
-    # If the robot is nearing its waypoint, start adding the bearing for the next waypoint
-    # This leads to smoother turning for this particular project
-    curr_distance = find_distance_alternate(state.x, state.y, tx, ty)
-    if curr_distance < waypoint_tolerance:
-        temp_alpha = math.atan2(next_ty - state.rear_y, next_tx - state.rear_x) - state.yaw
-        alpha = math.atan2(ty - state.rear_y, tx - state.rear_x) - state.yaw + ca * temp_alpha
-    else:
-        alpha = math.atan2(ty - state.rear_y, tx - state.rear_x) - state.yaw
-
-    # Modified delta by increasing the weightage of Lookahead distance
-    # ------------------------- ADD A CHECK FOR MAX STEERING ANGLE ------------------------------------------
-    delta = math.atan2(2.0 * WB * math.sin(alpha) / 2.0 * Lf, 1.0)
-
-    if delta > max_steering_angle:
-        delta = max_steering_angle
-
-    return delta, ind
-
-
-def draw_graph2(self, rnd=None, zono=None, zono2=None):
-    plt.clf()
-    if rnd is not None:
-        plt.plot(rnd.x, rnd.y, "^k")
-    for node in self.node_list:
-        if node.parent:
-            plt.plot(node.path_x, node.path_y, "-g")
-
-    for (ox, oy, size) in self.obstacle_list:
-        self.plot_circle(ox, oy, size)
-
-    if zono is not None:
-        self.plot_circle1(zono)
-
-    if zono2 is not None:
-        self.plot_circle1(zono2)
-
-    plt.plot(self.start.x, self.start.y, "xr")
-    plt.plot(self.end.x, self.end.y, "xr")
-    plt.axis("equal")
-    plt.axis([-7, 20, -7, 20])
-    plt.grid(True)
-    plt.pause(0.01)
-
-
-def plot_arrow(x, y, yaw, length=1.0, width=0.5, fc="r", ec="k"):
-    """
-    Plot arrow
-    """
-
-    if not isinstance(x, float):
-        for ix, iy, iyaw in zip(x, y, yaw):
-            plot_arrow(ix, iy, iyaw)
-    else:
-        plt.arrow(x, y, length * math.cos(yaw), length * math.sin(yaw),
-                  fc=fc, ec=ec, head_width=width, head_length=width)
-        plt.plot(x, y)
-
-def find_orientation(goal):
-    # This function is priarily used to find the inital orientation for the car
-
-    init_x, init_y = goal[0][0], goal[0][1]
-    end_x, end_y = goal[1][0], goal[1][1]
-
-    slope = end_y - init_y/end_x - init_x
-
-    return np.tan(slope)
-
-def check_collision_alternate(x, y, obstacleList):
-    for (ox, oy, size) in obstacleList:
-        dx_list = [ox - x]
-        dy_list = [oy - y]
-        d_list = [np.sqrt(dx * dx + dy * dy) for (dx, dy) in zip(dx_list, dy_list)]
-
-        if min(d_list) <= size - 2:
-            return False  # collision
-
-        return True  # safe
-
 def main(gx=6.0, gy=10.0):
     # Variable declarations here
-    follow = []
     all_paths = []
-    collision_time = []
     counter = 0
-    k = 0.01
-    Lfc = 2.5
-    flag = 1
-    max_steering_angle = np.pi/4
-
 
     print("start " + __file__)
 
@@ -643,10 +416,10 @@ def main(gx=6.0, gy=10.0):
     obstacleList = [(5, 5, 1), (3, 6, 2), (3, 8, 2), (3, 10, 2), (7, 5, 2),
                     (9, 5, 2), (8, 10, 1)]  # [x, y, radius]
     # Set Initial parameters
-    rrt = RRT(start=[0, 0],
-              goal=[gx, gy],
-              rand_area=[-2, 15],
-              obstacle_list=obstacleList)
+    rrt = RRT( start=[0, 0],
+        goal=[gx, gy],
+        rand_area=[-2, 15],
+        obstacle_list=obstacleList)
     path = rrt.planning(animation=show_animation)
     path_len = len(path)
     distance = find_distance(path)
@@ -667,41 +440,10 @@ def main(gx=6.0, gy=10.0):
         rrt = RRT(start=[temp_x, temp_y],
                   goal=[gx, gy],
                   rand_area=[-2, 15],
-                  obstacle_list=obstacleList,
-                  path = path)
+                  obstacle_list=obstacleList)
         new_path = rrt.planning(animation=show_animation)
 
-        while (z < path_len):
-            new_path.append(path[z])
-            z += 1
-
-        all_paths.append(new_path)
-
-    for every_path in all_paths:
-        new_distance = find_distance(every_path)
-        if new_distance < distance:
-            path = every_path
-
-    # Using this for observation purpose
-    temp_holder = path
-
-    # Repeat process
-    for every_node in path:
-        counter += 1
-        new_path = []
-        z = counter
-        temp_x = every_node[0]
-        temp_y = every_node[1]
-
-        # Call RRT from the selected node
-        rrt = RRT(start=[temp_x, temp_y],
-                  goal=[gx, gy],
-                  rand_area=[-2, 15],
-                  obstacle_list=obstacleList,
-                  path = path)
-        new_path = rrt.planning(animation=show_animation)
-
-        while (z < path_len):
+        while(z < path_len):
             new_path.append(path[z])
             z += 1
 
@@ -718,127 +460,9 @@ def main(gx=6.0, gy=10.0):
         for every_path in all_paths:
             plt.plot([x for (x, y) in every_path], [y for (x, y) in every_path], '-g')
         plt.plot([x for (x, y) in path], [y for (x, y) in path], 'black')
-        plt.plot([x for (x, y) in temp_holder], [y for (x, y) in temp_holder], 'orange')
         plt.grid(True)
         plt.pause(0.01)  # Need for Mac
         plt.show()
-
-
-    # Motion planning starts here
-
-    # The 'path' is in reversed order i.e the starting point is at the end of the list "path"
-    # We reverse the order here
-    list_length = len(path)
-    high = list_length - 1
-    while (high >= 0):
-        follow.append(path[high])
-        high -= 1
-    goal = follow
-    goal_x = []
-    goal_y = []
-
-    for i in range(len(goal)):
-        goal_x.append(goal[i][0])
-        goal_y.append(goal[i][1])
-
-    #  target course
-    cx = goal_x
-    cy = goal_y
-
-    target_speed = 10.0 / 10.0  # [m/s]
-
-    T = 100.0  # max simulation time
-
-    init_orientation = find_orientation(goal)
-
-    # initial state
-    state = State(x=goal_x[0], y=goal_y[0], yaw=-init_orientation, v=0.0)
-    lastIndex = len(cx) - 1
-    time = 0.0
-    states = States()
-    states.append(time, state)
-    target_course = TargetCourse(cx, cy)
-    target_ind, _ = target_course.search_target_index(state)
-
-    # Simulation variables
-    temp_state = State(x=goal_x[0], y=goal_y[0], yaw=-init_orientation, v=0.0)
-    temp_lastIndex = len(cx) - 1
-    temp_time = 0.0
-    temp_states = States()
-    temp_states.append(temp_time, temp_state)
-    temp_target_course = TargetCourse(cx, cy)
-    temp_target_ind, _ = temp_target_course.search_target_index(temp_state)
-
-    while T >= temp_time and temp_lastIndex > temp_target_ind:
-        # Calc control input
-        temp_time += dt
-
-        temp_ai = proportional_control(target_speed, temp_state.v)
-        temp_di, temp_target_ind = pure_pursuit_steer_control(
-            temp_state, temp_target_course, temp_target_ind, k, Lfc)
-
-        temp_state.update(temp_ai, temp_di)  # Control vehicle
-        if check_collision_alternate(temp_state.x, temp_state.y, obstacleList):
-            collision_time.append(temp_time)
-
-    while T >= time and lastIndex > target_ind:
-
-        new_speed = target_speed
-        # Calc control input
-        time += dt
-        for every_time in collision_time:
-            if (time == every_time - 2 or time == every_time - 3 or time == every_time - 4):
-                k = 0.05
-                Lfc = 1.0
-                new_speed = 0.1 * target_speed
-                flag = 0
-            else:
-                k = 0.01
-                Lfc = 2.5
-
-        di, target_ind = pure_pursuit_steer_control(
-            state, target_course, target_ind, k, Lfc)
-        if di >= 0.6 * max_steering_angle:
-            new_speed = 0.4 * target_speed
-            flag = 0
-        ai = proportional_control(new_speed, state.v, flag)
-
-        state.update(ai, di)  # Control vehicle
-        states.append(time, state)
-
-        if show_animation:  # pragma: no cover
-            plt.cla()
-            for (ox, oy, size) in obstacleList:
-                deg = list(range(0, 360, 5))
-                deg.append(0)
-                xl = [ox + size * math.cos(np.deg2rad(d)) for d in deg]
-                yl = [oy + size * math.sin(np.deg2rad(d)) for d in deg]
-                plt.plot(xl, yl, "b-")
-
-            plot_arrow(state.x, state.y, state.yaw)
-            plt.plot(cx, cy, "-r", label="course")
-            plt.plot(states.x, states.y, "-g", label="trajectory")
-            plt.plot(cx[target_ind], cy[target_ind], "xg", label="target")
-            plt.axis("equal")
-            plt.grid(True)
-            plt.title("Speed[km/h]:" + str(state.v * 3.6)[:4])
-            plt.pause(0.001)
-
-
-    # Test
-    assert lastIndex >= target_ind, "Cannot goal"
-    plt.plot(cx, cy, ".r", label="course")
-    plt.plot(states.x, states.y, "-g", label="trajectory")
-    plt.grid(True)
-    plt.pause(0.01)
-    plt.show()
-
-
-    plt.plot(states.t, [iv * 3.6 for iv in states.v], "-r")
-    plt.xlabel("Time[s]")
-    plt.ylabel("Speed[km/h]")
-    plt.grid(True)
-    plt.show()
 
 
 if __name__ == '__main__':

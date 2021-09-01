@@ -7,7 +7,8 @@ Guillaume Jacquenot (@Gjacquenot)
 Additional features and functionalities added by:
 Zeeshan Shaikh (@zzzeeshannn)
 
-This code involves modified RRT with Pure Pursuit Controller without any Obstacle Avoidance
+This code involves modified RRT with Pure Pursuit Controller with Static Obstacle Avoidance.
+This tries to solves Obstacle Avoidance at runtime.
 """
 
 import math
